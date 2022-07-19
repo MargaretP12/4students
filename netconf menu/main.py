@@ -2,17 +2,22 @@ import env_lab  # noqa
 from ncclient import manager
 import xmltodict
 import xml.dom.minidom
+from flask import Flask
+
+web = Flask(__name__)
 
 
 def connect():
     return manager.connect(
-            host=env_lab.IOS_XE_1["host"],
-            port=env_lab.IOS_XE_1["netconf_port"],
-            username=env_lab.IOS_XE_1["username"],
-            password=env_lab.IOS_XE_1["password"],
-            hostkey_verify=False
-            )
+        host=env_lab.IOS_XE_1["host"],
+        port=env_lab.IOS_XE_1["netconf_port"],
+        username=env_lab.IOS_XE_1["username"],
+        password=env_lab.IOS_XE_1["password"],
+        hostkey_verify=False
+    )
 
+
+@web.route("/get")
 def get_interfaces():
     netconf_filter = """
     <filter>
@@ -21,18 +26,22 @@ def get_interfaces():
     </interfaces>
     </filter>"""
 
-    netconf_reply = connect().get_config(source = 'running', filter = netconf_filter)
+    netconf_reply = connect().get_config(source='running', filter=netconf_filter)
 
     netconf_data = xmltodict.parse(netconf_reply.xml)["rpc-reply"]["data"]
     interfaces = netconf_data["interfaces"]["interface"]
-    print()
-    print("The interface status of the device is: ")
-    for interface in interfaces:
-        print(f'Interface {interface["name"]} enabled status is {interface["enabled"]}')
 
-def delInterface():
+    show = "<h1>The interface status of the device is: </h1> <ul>"
+    for interface in interfaces:
+        show += f'<li>Interface {interface["name"]} enabled status is {interface["enabled"]}</li>'
+    show += "</ul>"
+    return show
+
+
+@web.route("/del/<num>")
+def delInterface(num):
     new_loopback = {}
-    new_loopback["name"] = "Loopback" + input("What loopback number to delete? ")
+    new_loopback["name"] = "Loopback" + num
 
     netconf_data = f"""
     <config>
@@ -42,23 +51,25 @@ def delInterface():
             </interface>
         </interfaces>
     </config>"""
-    netconf_reply = connect().edit_config(netconf_data, target = 'running')
-    print("Here is the raw XML data returned from the device.\n")
-    print(xml.dom.minidom.parseString(netconf_reply.xml).toprettyxml())
-    get_interfaces()
+    netconf_reply = connect().edit_config(netconf_data, target='running')
 
-def addInterface():
+    show = f"<h1>The interface{num} was deleted</h1>" + get_interfaces()
+    return show
+
+@web.route('/add/<int:num>/<string:desc>/<string:ip>/<string:mask>')
+def addInterface(num, desc="default", ip="10.10.10.10", mask="255.255.255.0"):
     IETF_INTERFACE_TYPES = {
-    "loopback": "ianaift:softwareLoopback",
-    "ethernet": "ianaift:ethernetCsmacd"
+        "loopback": "ianaift:softwareLoopback",
+        "ethernet": "ianaift:ethernetCsmacd"
     }
     new_loopback = {}
-    new_loopback["name"] = "Loopback" + input("What loopback number to add? ")
-    new_loopback["desc"] = input("What description to use? ")
+    new_loopback["name"] = "Loopback" + str(num)
+    new_loopback["desc"] = desc
     new_loopback["type"] = IETF_INTERFACE_TYPES["loopback"]
     new_loopback["status"] = "true"
-    new_loopback["ip_address"] = input("What IP address? ")
-    new_loopback["mask"] = input("What network mask? ")
+    new_loopback["ip_address"] = ip
+    new_loopback["mask"] = mask
+    # print(new_loopback)
 
     netconf_data = f"""
     <config>
@@ -81,28 +92,20 @@ def addInterface():
     </config>"""
 
     netconf_reply = connect().edit_config(netconf_data, target = 'running')
-    print("Here is the raw XML data returned from the device.\n")
-    print(xml.dom.minidom.parseString(netconf_reply.xml).toprettyxml())
-    get_interfaces()
-    
+    data=f"<h1>Interface Number {num} was created:</h1>"+get_interfaces()
+    return data
 
+
+
+@web.route("/")
 def show_options():
-    options=[(1,"Show Interface",get_interfaces),(2,"Add Interface",addInterface),(3,"Delete interface",delInterface)]
-    print("What would you like to do:")
+    options = [(1, "Show Interface=get", get_interfaces), (2, "Add Interface=add", addInterface),
+               (3, "Delete interface", delInterface)]
+    show = "<h1>What would you like to do:</h1>"
     for option in options:
-        print(f"({option[0]}) {option[1]}")
-    choice=input()
-
-    if len(choice)==1 and choice.isdigit():
-        if 1<=int(choice)<=len(options):
-            choice=int(choice)
-            for option in options:
-                if choice == option[0]:
-                    option[2]()
-
-def main():
-    #while True:
-    show_options()
+        show += f"<h2>({option[0]}) go to ---> {option[1]}</h2>"
+    return show
 
 
-main()
+if __name__ == "__main__":
+    web.run(host="0.0.0.0", port=8080)
