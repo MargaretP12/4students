@@ -1,5 +1,11 @@
 pipeline {
-  agent any
+  agent {
+    docker {
+      image 'python:alpine3.7'
+      args '-p 5000:5000'
+    }
+
+  }
   stages {
     stage('Build') {
       steps {
@@ -18,6 +24,11 @@ pipeline {
         echo 'Deploying....'
       }
     }
+
   }
-  
+  environment {
+    registry = ' malikmargaret/new'
+    registryCredential = 'dockerhub'
+    dockerImage = ''
+  }
 }
