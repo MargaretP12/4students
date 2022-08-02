@@ -1,4 +1,9 @@
-Flask==1.1.2
-ncclient==0.6.0
-requests==2.22.0
+
+Flask
+ncclient
+requests
+xmlrunner
+pyang
+ncclinet
+xmltodict
 
