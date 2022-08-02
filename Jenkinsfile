@@ -11,29 +11,57 @@ pipeline {
       steps {
         echo 'Building..'
         sh 'apk add --update alpine-sdk'
-        sh 'apk add --update python3 py3-cffi py3-flask py3-jinja2 py3-markupsafe py3-lxml'
+        sh 'apk add --update  python3 py3-cffi py3-paramiko py3-flask py3-jinja2 py3-markupsafe py3-lxml'
         sh 'python3 -m ensurepip'
-        sh 'pip3 install -U pip'
+        sh ' pip3 install -U pip'
         sh 'pip install -r requirements.txt'
-        sh 'python3 ./netconf \\menu/main.py'
+        sh 'python3 ./netconf\\ menu/main.py &'
       }
     }
 
     stage('Test') {
+      post {
+        always {
+          junit 'test-reports/*.xml'
+        }
+
+      }
       steps {
-        echo 'Testing..'
+        echo "${env.NODE_NAME}"
+        sh 'python3 ./netconf\\ menu/tests.py'
       }
     }
 
-    stage('Deploy') {
+     stage('Build image') {
       steps {
-        echo 'Deploying....'
+        sh 'apk add --update docker'
+        script {
+          dockerImage = docker.build registry + ":$BUILD_NUMBER"
+        }
+
+      }
+    }
+
+    stage('Upload Image to Registry') {
+      steps {
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push()
+          }
+        }
+
+      }
+    }
+
+    stage('Remove Unused docker image') {
+      steps {
+        sh "docker rmi $registry:$BUILD_NUMBER"
       }
     }
 
   }
   environment {
-    registry = ' malikmargaret/new'
+    registry = 'malikmargaret/netconf'
     registryCredential = 'dockerhub'
     dockerImage = ''
   }
