@@ -4,6 +4,5 @@ ncclient
 requests
 xmlrunner
 pyang
-ncclinet
 xmltodict
 
